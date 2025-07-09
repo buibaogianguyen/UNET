@@ -120,14 +120,14 @@ def train_model(model, train_loader, val_loader, epochs, device, checkpoint_path
 
 if __name__ == '__main__':
     train_dataset = CocoDataset(
-        root_path = '',
-        annotation_file = '',
+        root_path = '', # input training folder path that includes training images and annotations
+        annotation_file = '', # input the specific annotation file inside of the training folder path
         transform=transform,
         target_size=(160,160)
     )
     valid_dataset = CocoDataset(
-        root_path = '',
-        annotation_file = '',
+        root_path = '', # input validation folder path that includes validation images and annotations
+        annotation_file = '', # input the specific annotation file inside of the validation folder path
         transform=transform,
         target_size=(160,160)
     )
@@ -138,4 +138,3 @@ if __name__ == '__main__':
     model = UNet(in_channels=3, out_channels=1)
     checkpoint_path = train_model(model, train_loader, valid_loader)
     logger.info(f'Training done. Best/Lowest validation loss checkpoint saved at {checkpoint_path}')
-
