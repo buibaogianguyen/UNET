@@ -27,7 +27,7 @@ class CocoDataset(Dataset):
 
         self.images = self.coco_data['images']
         self.annotations = self.coco_data['annotations']
-        logger.info(f"Loaded {len(self.images)} images with{len(self.annotations)} annotations")
+        logger.info(f"Loaded {len(self.images)} images with {len(self.annotations)} annotations")
 
     # DataLoader required
     def __len__(self):
@@ -35,7 +35,7 @@ class CocoDataset(Dataset):
     
     def __getitem__(self, idx):
         img_metadata = self.images[idx]
-        img_path = os.path.join(self.root_path, img_metadata['file name'])
+        img_path = os.path.join(self.root_path, img_metadata['file_name'])
         image = Image.open(img_path).convert('RGB')
 
         mask = np.zeros((img_metadata['height'], img_metadata['width']), dtype=np.uint8)
@@ -65,11 +65,11 @@ transform = transforms.Compose([
     transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
 ])
 
-def train_model(model, train_loader, val_loader, epochs, device, checkpoint_path='checkpoints'):
-    os.makedirs(checkpoint_path, exist_ok=True)
+def train_model(model, train_loader, val_loader, epochs, device, checkpoint_dir='checkpoints'):
+    os.makedirs(checkpoint_dir, exist_ok=True)
     model = model.to(device)
     criterion = nn.BCEWithLogitsLoss()
-    optimizer = optim.Adam(model.param, lr = 0.001)
+    optimizer = optim.Adam(model.parameters(), lr = 0.001)
     lowest_val_loss = float('inf')
 
     for epoch in range(epochs):
@@ -95,12 +95,12 @@ def train_model(model, train_loader, val_loader, epochs, device, checkpoint_path
 
         train_loss = train_loss / len(train_loader.dataset)
         val_loss = val_loss / len(val_loader.dataset)
-        logger.info(f'Epoch: {epoch+1}/{epochs}\n Train Loss: {train_loss:.4f}\n Validation Loss: {val_loss:.4f}')
+        logger.info(f'Epoch: {epoch+1}/{epochs}\nTrain Loss: {train_loss:.4f}\nValidation Loss: {val_loss:.4f}')
 
-        checkpoint_path = os.path.join(checkpoint_path, f'unet_training_epoch_{epoch+1}.pth')
+        checkpoint_path = os.path.join(checkpoint_dir, f'unet_training_epoch_{epoch+1}.pth')
         torch.save({
             'epoch': epoch,
-            'model_state_dict' : model.state.dict(),
+            'model_state_dict' : model.state_dict(),
             'optimizer_state_dict' : optimizer.state_dict(),
             'val_loss' : val_loss
         }, checkpoint_path)
@@ -108,13 +108,14 @@ def train_model(model, train_loader, val_loader, epochs, device, checkpoint_path
         if val_loss < lowest_val_loss:
             lowest_val_loss = val_loss
 
-            best_checkpoint_path = os.path.join(checkpoint_path, 'best_checkpoint.pth')
+            best_checkpoint_path = os.path.join(checkpoint_dir, 'best_checkpoint.pth')
             torch.save({
                 'epoch': epoch,
                 'model_state_dict': model.state_dict(),
                 'optimizer_state_dict': optimizer.state_dict(),
                 'val_loss': val_loss
             }, best_checkpoint_path)
+            logger.info(f'Saved best/lowest validation loss checkpoint with loss: {val_loss:.4f}')
 
     return best_checkpoint_path
 
@@ -133,8 +134,8 @@ if __name__ == '__main__':
     )
 
     train_loader = DataLoader(train_dataset, batch_size=8, shuffle=True, num_workers=0)
-    valid_loader = DataLoader(valid_dataset, batch_size=8, shuffle=False, num_workers=0)
+    val_loader = DataLoader(valid_dataset, batch_size=8, shuffle=False, num_workers=0)
 
     model = UNet(in_channels=3, out_channels=1)
-    checkpoint_path = train_model(model, train_loader, valid_loader)
+    checkpoint_path = train_model(model, train_loader, val_loader, epochs, device)
     logger.info(f'Training done. Best/Lowest validation loss checkpoint saved at {checkpoint_path}')
