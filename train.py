@@ -10,6 +10,9 @@ import numpy as np
 from main_model import UNet
 import logging
 
+epochs = 50 # adjust as needed
+device = 'cuda' if torch.cuda.is_available() else 'cpu'
+
 logging.basicConfig(level=logging.INFO, format='%(message)s')
 logger = logging.getLogger(__name__)
 
@@ -61,3 +64,78 @@ transform = transforms.Compose([
     transforms.ToTensor(),
     transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
 ])
+
+def train_model(model, train_loader, val_loader, epochs, device, checkpoint_path='checkpoints'):
+    os.makedirs(checkpoint_path, exist_ok=True)
+    model = model.to(device)
+    criterion = nn.BCEWithLogitsLoss()
+    optimizer = optim.Adam(model.param, lr = 0.001)
+    lowest_val_loss = float('inf')
+
+    for epoch in range(epochs):
+        model.train()
+        train_loss = 0.0
+        for images, masks in train_loader:
+            images,masks = images.to(device), masks.to(device)
+            optimizer.zero_grad()
+            outputs = model(images)
+            loss = criterion(outputs, masks)
+            loss.backward()
+            optimizer.step()
+            train_loss += loss.item() * images.size(0)
+
+        model.eval()
+        val_loss = 0.0
+        with torch.no_grad():
+            for images, masks in val_loader:
+                images, masks = images.to(device), masks.to(device)
+                outputs = model(images)
+                loss = criterion(outputs, masks)
+                val_loss += loss.item() * images.size(0)
+
+        train_loss = train_loss / len(train_loader.dataset)
+        val_loss = val_loss / len(val_loader.dataset)
+        logger.info(f'Epoch: {epoch+1}/{epochs}\n Train Loss: {train_loss:.4f}\n Validation Loss: {val_loss:.4f}')
+
+        checkpoint_path = os.path.join(checkpoint_path, f'unet_training_epoch_{epoch+1}.pth')
+        torch.save({
+            'epoch': epoch,
+            'model_state_dict' : model.state.dict(),
+            'optimizer_state_dict' : optimizer.state_dict(),
+            'val_loss' : val_loss
+        }, checkpoint_path)
+
+        if val_loss < lowest_val_loss:
+            lowest_val_loss = val_loss
+
+            best_checkpoint_path = os.path.join(checkpoint_path, 'best_checkpoint.pth')
+            torch.save({
+                'epoch': epoch,
+                'model_state_dict': model.state_dict(),
+                'optimizer_state_dict': optimizer.state_dict(),
+                'val_loss': val_loss
+            }, best_checkpoint_path)
+
+    return best_checkpoint_path
+
+if __name__ == '__main__':
+    train_dataset = CocoDataset(
+        root_path = '',
+        annotation_file = '',
+        transform=transform,
+        target_size=(160,160)
+    )
+    valid_dataset = CocoDataset(
+        root_path = '',
+        annotation_file = '',
+        transform=transform,
+        target_size=(160,160)
+    )
+
+    train_loader = DataLoader(train_dataset, batch_size=8, shuffle=True, num_workers=0)
+    valid_loader = DataLoader(valid_dataset, batch_size=8, shuffle=False, num_workers=0)
+
+    model = UNet(in_channels=3, out_channels=1)
+    checkpoint_path = train_model(model, train_loader, valid_loader)
+    logger.info(f'Training done. Best/Lowest validation loss checkpoint saved at {checkpoint_path}')
+
