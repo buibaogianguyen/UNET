@@ -91,13 +91,24 @@ class UNet(nn.Module):
 
         return self.final_conv(x)
 
-def test():
-    x = torch.randn((3,3,160,160))
-    model = UNet(in_channels=3,out_channels=1)
-    preds = model(x)
-    print(preds.shape)
-    print(x.shape)
-    assert preds.shape[0] == x.shape[0] and preds.shape[2:] == x.shape[2:]
+    def save_checkpoint(self, path, optimizer, epoch, loss):
+        """Save model checkpoint"""
+        checkpoint = {
+            'state_dict': self.state_dict(),
+            'optimizer': optimizer.state_dict(),
+            'epoch': epoch,
+            'loss': loss
+        }
+        torch.save(checkpoint, path)
+        print(f"Checkpoint saved at {path}")
 
-if __name__ == "__main__":
-    test()
+    def load_checkpoint(self, path, optimizer=None):
+        """Load model checkpoint"""
+        try:
+            checkpoint = torch.load(path, map_location=torch.device('cuda'))
+            self.load_state_dict(checkpoint['state_dict'])
+            if optimizer is not None:
+                optimizer.load_state_dict(checkpoint['optimizer'])
+            return checkpoint['epoch'], checkpoint['loss']
+        except FileNotFoundError:
+            raise FileNotFoundError(f"Checkpoint file not found at {path}. Please train the model first.")
