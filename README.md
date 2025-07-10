@@ -119,6 +119,7 @@ python train.py
 Configurations based on your device and dataset:
 - Adjust epochs in ```train.py```
 - Modify batch_size in the DataLoader (default is 8)
+- This model supports configurable image resolutions for training and inference, the default is 320x320. You can manually change the resolution by changing all .resize((320,320)), transforms.Resize((320,320)), and target_size=(320,320) functions across ```train.py``` and ```inference.py```. You can change it to other square values like 160x160 or 640x640. 
 
 ## Inference
 
