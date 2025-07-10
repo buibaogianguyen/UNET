@@ -17,7 +17,7 @@ logging.basicConfig(level=logging.INFO, format='%(message)s')
 logger = logging.getLogger(__name__)
 
 class CocoDataset(Dataset):
-    def __init__(self, root_path, annotation_file, transform=None, target_size = (160,160)):
+    def __init__(self, root_path, annotation_file, transform=None, target_size = (320,320)):
         self.root_path = root_path
         self.transform = transform
         self.target_size = target_size
@@ -66,7 +66,17 @@ def train_model(model, train_loader, val_loader, epochs, device, checkpoint_dir=
     model = model.to(device)
     criterion = nn.BCEWithLogitsLoss()
     optimizer = optim.Adam(model.parameters(), lr = 0.001)
+    stats_path = os.path.join('checkpoints', 'dataset_stats.json')
+
     lowest_val_loss = float('inf')
+    stats = {}
+    
+    if os.path.exists(stats_path):
+        with open(stats_path, 'r') as f:
+            stats = json.load(f)
+            lowest_val_loss = stats.get('best_val_loss', float('inf'))
+
+    logger.info(f"Loaded all-time best validation loss: {lowest_val_loss:.4f} from {stats_path}")
 
     for epoch in range(epochs):
         model.train()
@@ -113,6 +123,11 @@ def train_model(model, train_loader, val_loader, epochs, device, checkpoint_dir=
             }, best_checkpoint_path)
             logger.info(f'Saved best/lowest validation loss checkpoint with loss: {val_loss:.4f}')
 
+            stats['best_val_loss'] = lowest_val_loss
+            with open(stats_path, 'w') as f:
+                json.dump(stats, f, indent=4)
+            logger.info(f'Updated {stats_path} with all-time best validation loss: {lowest_val_loss:.4f}')
+
     return best_checkpoint_path
 
 def mean_std(dataset, transform):
@@ -134,32 +149,40 @@ def mean_std(dataset, transform):
 
 if __name__ == '__main__':
     transform = transforms.Compose([
-        transforms.Resize((160, 160)),
+        transforms.Resize((320, 320)),
         transforms.ToTensor()
     ])
 
+    # all paths should contain forward slash (/), not back slash (\)
     train_dataset = CocoDataset(
         root_path = '', # input training folder path that includes training images and annotations
         annotation_file = '', # input the specific annotation file inside of the training folder path
         transform=None,
-        target_size=(160,160)
+        target_size=(320,320)
     )
     valid_dataset = CocoDataset(
         root_path = '', # input validation folder path that includes validation images and annotations
         annotation_file = '', # input the specific annotation file inside of the validation folder path
         transform=None,
-        target_size=(160,160)
+        target_size=(320,320)
     )
 
     train_mean, train_std = mean_std(train_dataset, transform)
     logger.info(f"Calculated mean: {train_mean.tolist()}")
     logger.info(f"Calculated standard deviation: {train_std.tolist()}")
 
-    stats = {
-        'mean' : train_mean.tolist(),
-        'std' : train_std.tolist()
-    }
     stats_path = os.path.join('checkpoints', 'dataset_stats.json')
+    stats = {}
+
+    if os.path.exists(stats_path):
+        with open(stats_path, 'r') as f:
+            stats = json.load(f)
+    
+    stats.update({
+        'mean': train_mean.tolist(),
+        'std': train_std.tolist()
+    })
+
     os.makedirs('checkpoints', exist_ok=True)
     with open(stats_path, 'w') as f:
         json.dump(stats, f)
@@ -167,7 +190,7 @@ if __name__ == '__main__':
 
     # apply normalization
     transform = transforms.Compose([
-        transforms.Resize((160,160)),
+        transforms.Resize((320,320)),
         transforms.ToTensor(),
         transforms.Normalize(mean = train_mean, std = train_std)
     ])
