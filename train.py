@@ -56,15 +56,11 @@ class CocoDataset(Dataset):
         if self.transform:
             image = self.transform(image)
             mask = torch.from_numpy(mask).float().unsqueeze(0)
+        else:
+            mask = torch.from_numpy(mask).float().unsqueeze(0)
 
         return image, mask
     
-transform = transforms.Compose([
-    transforms.Resize((160, 160)),
-    transforms.ToTensor(),
-    transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
-])
-
 def train_model(model, train_loader, val_loader, epochs, device, checkpoint_dir='checkpoints'):
     os.makedirs(checkpoint_dir, exist_ok=True)
     model = model.to(device)
@@ -119,19 +115,54 @@ def train_model(model, train_loader, val_loader, epochs, device, checkpoint_dir=
 
     return best_checkpoint_path
 
+def mean_std(dataset, transform):
+    channel_sum = np.zeros(3)
+    channel_sum_sq = np.zeros(3)
+    pixels = 0
+
+    for idx in range(len(dataset)):
+        image, _ = dataset[idx]
+        image = transform(image).numpy()
+        channel_sum += np.sum(image, axis=(1, 2))
+        channel_sum_sq += np.sum(image**2, axis=(1, 2))
+        pixels += image.shape[1] * image.shape[2]
+
+    # image dataset stats formula
+    mean = channel_sum / pixels
+    std = np.sqrt((channel_sum_sq / pixels) - (mean ** 2))
+    return mean, std
+
 if __name__ == '__main__':
+    transform = transforms.Compose([
+        transforms.Resize((160, 160)),
+        transforms.ToTensor()
+    ])
+
     train_dataset = CocoDataset(
         root_path = '', # input training folder path that includes training images and annotations
         annotation_file = '', # input the specific annotation file inside of the training folder path
-        transform=transform,
+        transform=None,
         target_size=(160,160)
     )
     valid_dataset = CocoDataset(
         root_path = '', # input validation folder path that includes validation images and annotations
         annotation_file = '', # input the specific annotation file inside of the validation folder path
-        transform=transform,
+        transform=None,
         target_size=(160,160)
     )
+
+    train_mean, train_std = mean_std(train_dataset, transform)
+    logger.info(f"Calculated mean: {train_mean.tolist()}")
+    logger.info(f"Calculated standard deviation: {train_std.tolist()}")
+
+    # apply normalization
+    transform = transforms.Compose([
+        transforms.Resize((160,160)),
+        transforms.ToTensor(),
+        transforms.Normalize(mean = train_mean, std = train_std)
+    ])
+    train_dataset.transform = transform
+    valid_dataset.transform = transform
 
     train_loader = DataLoader(train_dataset, batch_size=8, shuffle=True, num_workers=0)
     val_loader = DataLoader(valid_dataset, batch_size=8, shuffle=False, num_workers=0)
