@@ -155,6 +155,16 @@ if __name__ == '__main__':
     logger.info(f"Calculated mean: {train_mean.tolist()}")
     logger.info(f"Calculated standard deviation: {train_std.tolist()}")
 
+    stats = {
+        'mean' : train_mean.tolist(),
+        'std' : train_std.tolist()
+    }
+    stats_path = os.path.join('checkpoints', 'dataset_stats.json')
+    os.makedirs('checkpoints', exist_ok=True)
+    with open(stats_path, 'w') as f:
+        json.dump(stats, f)
+    logger.info(f'Saved dataset mean and standard deviation to {stats_path}')
+
     # apply normalization
     transform = transforms.Compose([
         transforms.Resize((160,160)),
